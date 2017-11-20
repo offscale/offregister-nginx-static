@@ -8,12 +8,14 @@ from offregister_fab_utils.apt import apt_depends
 from offregister_fab_utils.ubuntu.systemd import restart_systemd
 
 
-def setup_conf0(nginx_conf='api_and_static.conf', conf_keys=None, skip_nginx_restart=False, *args, **kwargs):
+def setup_conf0(nginx_conf='api-and-static.conf', conf_keys=None, skip_nginx_restart=False, *args, **kwargs):
     apt_depends('nginx')
 
     if conf_keys is None:
-        conf_keys = {'api_and_static.conf': ('SERVER_NAME', 'WWWROOT', 'API_HOST', 'API_PORT'),
-                     'static.conf': ('SERVER_NAME', 'WWWROOT')}.get(nginx_conf)
+        conf_keys = {'api-and-static.conf': ('SERVER_NAME', 'WWWROOT', 'API_HOST', 'API_PORT'),
+                     'static.conf': ('SERVER_NAME', 'WWWROOT'),
+                     'proxy-pass.conf': ('NAME_OF_BLOCK', 'SERVER_LOCATION', 'SERVER_NAME', 'ROUTE_BLOCK')
+                     }.get(nginx_conf)
 
     conf_local_filepath = kwargs.get(
         'nginx-conf-file', resource_filename('offregister_nginx_static', path.join('conf', nginx_conf))
