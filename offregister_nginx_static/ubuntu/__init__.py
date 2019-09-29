@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from os import path
 
 from fabric.contrib.files import upload_template
@@ -18,7 +20,8 @@ def setup_conf0(nginx_conf='api-and-static.conf', conf_keys=None, skip_nginx_res
         conf_keys = {
             'api-and-static.conf': ('SERVER_NAME', 'WWWROOT', 'API_HOST', 'API_PORT', 'LISTEN_PORT'),
             'static.conf': ('SERVER_NAME', 'WWWROOT'),
-            'proxy-pass.conf': ('NAME_OF_BLOCK', 'SERVER_LOCATION', 'SERVER_NAME', 'ROUTE_BLOCK', 'LISTEN_PORT')
+            'proxy-pass.conf': ('NAME_OF_BLOCK', 'SERVER_LOCATION', 'SERVER_NAME',
+                                'ROUTE_BLOCK', 'LISTEN_PORT', 'LOCATION')
         }.get(nginx_conf)
 
     conf_local_filepath = kwargs.get(
@@ -27,9 +30,11 @@ def setup_conf0(nginx_conf='api-and-static.conf', conf_keys=None, skip_nginx_res
     conf_remote_filename = kwargs.get('conf_remote_filename', '/etc/nginx/conf.d/{}'.format(
         kwargs.get('nginx-conf-filename', path.basename(conf_local_filepath))
     ))
+    if not conf_remote_filename.endswith('.conf'):
+        conf_remote_filename += '.conf'
     upload_template(conf_local_filepath, conf_remote_filename,
                     context=conf_keys if conf_keys is None else {k: kwargs[k] for k in conf_keys},
-                    use_sudo=True)
+                    use_sudo=True, backup=False)
 
     if skip_nginx_restart:
         return
