@@ -1,21 +1,25 @@
 from os import path
-from pkg_resources import resource_filename
 
 from fabric.contrib.files import upload_template
 from fabric.operations import sudo
-
 from offregister_fab_utils.apt import apt_depends
 from offregister_fab_utils.ubuntu.systemd import restart_systemd
+from pkg_resources import resource_filename
 
 
 def setup_conf0(nginx_conf='api-and-static.conf', conf_keys=None, skip_nginx_restart=False, *args, **kwargs):
     apt_depends('nginx')
+    kwargs.setdefault('LISTEN_PORT', 80)
+    kwargs.setdefault('NAME_OF_BLOCK', 'server_block')
+    kwargs.setdefault('ROUTE_BLOCK', '')
+    kwargs.setdefault('LOCATION', '/')
 
     if conf_keys is None:
-        conf_keys = {'api-and-static.conf': ('SERVER_NAME', 'WWWROOT', 'API_HOST', 'API_PORT'),
-                     'static.conf': ('SERVER_NAME', 'WWWROOT'),
-                     'proxy-pass.conf': ('NAME_OF_BLOCK', 'SERVER_LOCATION', 'SERVER_NAME', 'ROUTE_BLOCK')
-                     }.get(nginx_conf)
+        conf_keys = {
+            'api-and-static.conf': ('SERVER_NAME', 'WWWROOT', 'API_HOST', 'API_PORT', 'LISTEN_PORT'),
+            'static.conf': ('SERVER_NAME', 'WWWROOT'),
+            'proxy-pass.conf': ('NAME_OF_BLOCK', 'SERVER_LOCATION', 'SERVER_NAME', 'ROUTE_BLOCK', 'LISTEN_PORT')
+        }.get(nginx_conf)
 
     conf_local_filepath = kwargs.get(
         'nginx-conf-file', resource_filename('offregister_nginx_static', path.join('conf', nginx_conf))
