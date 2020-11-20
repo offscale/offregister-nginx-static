@@ -44,10 +44,12 @@ def setup_conf0(
         "nginx-conf-file",
         resource_filename("offregister_nginx_static", path.join("conf", nginx_conf)),
     )
+    conf_remote_filepath = kwargs.get("nginx-conf-dirname", "/etc/nginx/conf.d")
     conf_remote_filename = kwargs.get(
         "conf_remote_filename",
-        "/etc/nginx/conf.d/{}".format(
-            kwargs.get("nginx-conf-filename", path.basename(conf_local_filepath))
+        "{conf_remove_filepath}/{conf_remove_basename}".format(
+            conf_remove_filepath=conf_remote_filepath,
+            conf_remove_basename=kwargs.get("nginx-conf-filename", path.basename(conf_local_filepath))
         ),
     )
     if not conf_remote_filename.endswith(".conf"):
