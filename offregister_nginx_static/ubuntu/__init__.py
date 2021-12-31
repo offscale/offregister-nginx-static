@@ -49,7 +49,9 @@ def setup_conf0(
         "conf_remote_filename",
         "{conf_remove_filepath}/{conf_remove_basename}".format(
             conf_remove_filepath=conf_remote_filepath,
-            conf_remove_basename=kwargs.get("nginx-conf-filename", path.basename(conf_local_filepath))
+            conf_remove_basename=kwargs.get(
+                "nginx-conf-filename", path.basename(conf_local_filepath)
+            ),
         ),
     )
     if not conf_remote_filename.endswith(".conf"):
