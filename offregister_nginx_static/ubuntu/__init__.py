@@ -1,20 +1,24 @@
 from os import path
 
-from fabric.contrib.files import upload_template
-from fabric.operations import sudo
 from offregister_fab_utils.apt import apt_depends
+from offregister_fab_utils.misc import upload_template_fmt
 from offregister_fab_utils.ubuntu.systemd import restart_systemd
 from pkg_resources import resource_filename
 
 
 def setup_conf0(
+    c,
     nginx_conf="api-and-static.conf",
     conf_keys=None,
     skip_nginx_restart=False,
     *args,
     **kwargs
 ):
-    apt_depends("nginx")
+    """
+    :param c: Connection
+    :type c: ```fabric.connection.Connection```
+    """
+    apt_depends(c, "nginx")
     kwargs.setdefault("LISTEN_PORT", 80)
     kwargs.setdefault("NAME_OF_BLOCK", "server_block")
     kwargs.setdefault("ROUTE_BLOCK", "")
@@ -56,7 +60,8 @@ def setup_conf0(
     )
     if not conf_remote_filename.endswith(".conf"):
         conf_remote_filename += ".conf"
-    upload_template(
+    upload_template_fmt(
+        c,
         conf_local_filepath,
         conf_remote_filename,
         context=conf_keys if conf_keys is None else {k: kwargs[k] for k in conf_keys},
@@ -67,6 +72,6 @@ def setup_conf0(
     if skip_nginx_restart:
         return
 
-    restart_systemd("nginx")
+    restart_systemd(c, "nginx")
 
-    return sudo("systemctl status nginx --no-pager --full")
+    return c.sudo("systemctl status nginx --no-pager --full")
