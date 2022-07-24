@@ -1,12 +1,93 @@
 from os import path
 
+from patchwork.files import exists
+
 from offregister_fab_utils.apt import apt_depends
 from offregister_fab_utils.misc import upload_template_fmt
 from offregister_fab_utils.ubuntu.systemd import restart_systemd
 from pkg_resources import resource_filename
 
 
-def setup_conf0(
+def install_nginx0(c, *args, **kwargs):
+    """
+    :param c: Connection
+    :type c: ```fabric.connection.Connection```
+    """
+    if kwargs["cache"]["os_version"] == "debian":
+        apt_depends(
+            c,
+            "curl",
+            "gnupg2",
+            "ca-certificates",
+            "lsb-release",
+            "debian-archive-keyring",
+        )
+        c.sudo(
+            "curl https://nginx.org/keys/nginx_signing.key"
+            " | gpg --dearmor"
+            " | tee /usr/share/keyrings/nginx-archive-keyring.gpg",
+            hide=True,
+        )
+        c.run(
+            "gpg --dry-run --quiet --import --import-options import-show"
+            " /usr/share/keyrings/nginx-archive-keyring.gpg",
+            warn=True,
+        )
+        c.sudo(
+            'echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian'
+            ' `lsb_release -cs` nginx"'
+            " | tee /etc/apt/sources.list.d/nginx.list"
+        )
+        c.sudo(
+            'echo -e "Package: *\\nPin: origin nginx.org\\nPin: release o=nginx\\nPin-Priority: 900\\n"'
+            " | tee /etc/apt/preferences.d/99nginx"
+        )
+    else:
+        apt_depends(
+            c, "curl", "gnupg2", "ca-certificates", "lsb-release", "ubuntu-keyring"
+        )
+        c.sudo(
+            "curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor"
+            " | tee /usr/share/keyrings/nginx-archive-keyring.gpg",
+            hide=True,
+        )
+        c.run(
+            "gpg --dry-run --quiet --import --import-options import-show"
+            " /usr/share/keyrings/nginx-archive-keyring.gpg",
+            warn=True,
+        )
+        c.sudo(
+            'echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg]'
+            ' http://nginx.org/packages/ubuntu `lsb_release -cs` nginx"'
+            " | tee /etc/apt/sources.list.d/nginx.list"
+        )
+        c.sudo(
+            'echo -e "Package: *\\nPin: origin nginx.org\\nPin: release o=nginx\\nPin-Priority: 900\n"'
+            " | tee /etc/apt/preferences.d/99nginx"
+        )
+    c.sudo("apt-get update -qq")
+    apt_depends(c, "nginx")
+    return "Installed nginx"
+
+
+def setup_nginx_conf1(c, *args, **kwargs):
+    """
+    :param c: Connection
+    :type c: ```fabric.connection.Connection```
+    """
+    if exists(c, runner=c.sudo, path="/etc/nginx/nginx.conf"):
+        if c.sudo("grep -qF 'sites-enabled' /etc/nginx/nginx.conf", warn=True, hide=True).exited != 0:
+            c.sudo(
+                "sed -i '/include \/etc\/nginx\/conf.d\/\*.conf;/a"
+                "    include \/etc\/nginx\/sites-enabled\/\*.conf;' "
+                "/etc/nginx/nginx.conf"
+            )
+    else:
+        print("[setup_nginx_conf1] nonexistent")
+    print("[setup_nginx_conf1] out")
+
+
+def setup_custom_conf2(
     c,
     nginx_conf="api-and-static.conf",
     conf_keys=None,
@@ -129,31 +210,25 @@ def setup_conf0(
     location_fname = "{}/{}".format(base_conf_path, conf_name)
     if path.isfile(location_fname):
         with open(location_fname, "rt") as f:
-            location_block = f.read() % {
+            kwargs["SERVER_BODY"] = f.read() % {
                 k: kwargs[k] for k in builtin_contexts[conf_name]
             }
     else:
-        location_block = ""
+        kwargs.setdefault("SERVER_BODY", "")
 
     if http_to_https and https:
         fname = "{}/{}".format(base_conf_path, nginx_conf)
-        kwargs["SERVER_BODY"] = ""
         if path.isfile(fname):
             with open(fname, "rt") as f:
                 nginx_config_content = f.read() % {
-                    k: kwargs[k] for k in builtin_contexts[fname]
+                    k: kwargs[k] for k in builtin_contexts[nginx_conf]
                 }
         else:
             nginx_config_content = ""
 
         del kwargs["EXTRA_BODY_FOOT"]
 
-        kwargs.update(
-            {"EXTRA_HEAD": nginx_config_content, "SERVER_BODY": location_block}
-        )
-        nginx_conf = nginx_conf.replace(".conf", ".https.conf")
-    else:
-        kwargs["SERVER_BODY"] = location_block
+        kwargs["EXTRA_HEAD"] = nginx_config_content
     # </WEBSOCKET only (so far)>
 
     upload_template_fmt(
@@ -162,6 +237,7 @@ def setup_conf0(
         conf_remote_filename,
         context=conf_keys if conf_keys is None else {k: kwargs[k] for k in conf_keys},
         use_sudo=True,
+        mode=0o400,
         backup=False,
     )
 
@@ -173,4 +249,4 @@ def setup_conf0(
     return c.sudo("systemctl status nginx --no-pager --full")
 
 
-__all__ = ["setup_conf0"]
+__all__ = ["install_nginx0", "setup_nginx_conf1", "setup_custom_conf2"]

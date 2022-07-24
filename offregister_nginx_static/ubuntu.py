@@ -1,3 +1,3 @@
 from offregister_nginx_static.deb_shared import *
 
-__all__ = ["setup_conf0"]
+__all__ = ["install_nginx0", "setup_nginx_conf1", "setup_custom_conf2"]
