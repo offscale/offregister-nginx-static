@@ -1,11 +1,18 @@
+from functools import partial
 from os import path
-
-from patchwork.files import exists
+from sys import modules
 
 from offregister_fab_utils.apt import apt_depends
 from offregister_fab_utils.misc import upload_template_fmt
 from offregister_fab_utils.ubuntu.systemd import restart_systemd
+from patchwork.files import exists
 from pkg_resources import resource_filename
+
+conf_dir = partial(
+    path.join,
+    path.dirname(resource_filename(modules[__name__].__name__, "__init__.py")),
+    "conf",
+)
 
 
 def install_nginx0(c, *args, **kwargs):
@@ -76,7 +83,12 @@ def setup_nginx_conf1(c, *args, **kwargs):
     :type c: ```fabric.connection.Connection```
     """
     if exists(c, runner=c.sudo, path="/etc/nginx/nginx.conf"):
-        if c.sudo("grep -qF 'sites-enabled' /etc/nginx/nginx.conf", warn=True, hide=True).exited != 0:
+        if (
+            c.sudo(
+                "grep -qF 'sites-enabled' /etc/nginx/nginx.conf", warn=True, hide=True
+            ).exited
+            != 0
+        ):
             c.sudo(
                 "sed -i '/include \/etc\/nginx\/conf.d\/\*.conf;/a"
                 "    include \/etc\/nginx\/sites-enabled\/\*.conf;' "
@@ -136,8 +148,12 @@ def setup_custom_conf2(
         root = "/etc/letsencrypt/live/{SERVER_NAME}".format(
             SERVER_NAME=kwargs["SERVER_NAME"]
         )
-        kwargs["SSL_CERTIFICATE"] = "{root}/fullchain.pem".format(root=root)
-        kwargs["SSL_CERTIFICATE_KEY"] = "{root}/privkey.pem".format(root=root)
+        kwargs.update(
+            {
+                "SSL_CERTIFICATE": "{root}/fullchain.pem".format(root=root),
+                "SSL_CERTIFICATE_KEY": "{root}/privkey.pem".format(root=root),
+            }
+        )
 
     builtin_contexts = {
         "api-and-static.conf": (
@@ -179,10 +195,7 @@ def setup_custom_conf2(
     if conf_keys is None:
         conf_keys = builtin_contexts.get(nginx_conf)
 
-    conf_local_filepath = kwargs.get(
-        "nginx-conf-file",
-        resource_filename("offregister_nginx_static", path.join("conf", nginx_conf)),
-    )
+    conf_local_filepath = kwargs.get("nginx-conf-file", conf_dir(nginx_conf))
     conf_remote_filepath = kwargs.get("nginx-conf-dirname", "/etc/nginx/conf.d")
     conf_remote_filename = kwargs.get(
         "conf_remote_filename",
@@ -199,7 +212,7 @@ def setup_custom_conf2(
     # <WEBSOCKET only (so far)>
     base_conf_path = path.basename(conf_remote_filename)
 
-    top_fname = "{}/{}".format(base_conf_path, nginx_conf.replace(".conf", ".top.conf"))
+    top_fname = conf_dir(nginx_conf.replace(".conf", ".top.conf"))
     if path.isfile(top_fname):
         with open(top_fname, "rt") as f:
             kwargs["EXTRA_HEAD"] = f.read()
@@ -207,7 +220,7 @@ def setup_custom_conf2(
         kwargs.setdefault("EXTRA_HEAD", "")
 
     conf_name = nginx_conf.replace(".conf", ".location.conf")
-    location_fname = "{}/{}".format(base_conf_path, conf_name)
+    location_fname = conf_dir(conf_name)
     if path.isfile(location_fname):
         with open(location_fname, "rt") as f:
             kwargs["SERVER_BODY"] = f.read() % {
@@ -246,7 +259,8 @@ def setup_custom_conf2(
 
     restart_systemd(c, "nginx")
 
-    return c.sudo("systemctl status nginx --no-pager --full")
+    res = c.sudo("systemctl status nginx --no-pager --full")
+    return res.stdout if res.exited == 0 else res.stderr
 
 
 __all__ = ["install_nginx0", "setup_nginx_conf1", "setup_custom_conf2"]
